@@ -1251,7 +1251,7 @@ def Plot_Moment( Points, Supports, wBay_Main, wBay, CnB,NB,Beams, M_MIN, M_MAX, 
     # legend    
     ax.plot( [0,0], [0,0], lw=4, c='r', ls='-', label='--ve M (KNm)  /\ @ Supports' )
     ax.plot( [0,0], [0,0], lw=4, c='g', ls='-', label='+ve M (KNm)  \/ @ Mid-Spans' )
-    plt.legend()
+    plt.legend(loc='best')
     
     # ylim
     plt.ylim([-1,+1])
