@@ -1215,18 +1215,19 @@ def Plot_Moment( Points, Supports, wBay_Main, wBay, CnB,NB,Beams, M_MIN, M_MAX, 
         x = [x0,x1]
         y = [y0,y1]
         ax.plot( x, y, lw=1.5, c='g', ls='--', marker='' )
-        if   y1>=0:  plt.text( x1, y1+.1, str(int(M_MAX.loc[i,'M'])), ha='center', font='MV BOLI', fontsize=14 )
+        if   y1>=0:  plt.text( x1, y1+.10, str(int(M_MAX.loc[i,'M'])), ha='center', font='MV BOLI', fontsize=14 )
         elif y1< 0:  plt.text( x1, y1-.25, str(int(M_MAX.loc[i,'M'])), ha='center', font='MV BOLI', fontsize=14 )
         
 
+    # Supports
     for i in Points.index:
         x = Points.loc[i,'x']
         y = Points.loc[i,'y']
-        if   Supports[i]=='fixed' : marker, ec, fc, y = 's', 'lightgray', 'lightgray', y-0.0
-        elif Supports[i]=='pinned': marker, ec, fc, y = '^', 'lightgray', 'lightgray', y-0.1
-        elif Supports[i]=='roller': marker, ec, fc, y = 'o', 'lightgray', 'lightgray', y-0.1
-        elif Supports[i]=='free'  : marker, ec, fc, y = 'x',      'gray',      'gray', y-0.0
-        elif Supports[i]=='mid'   : marker, ec, fc, y = '' ,      'gray',      'gray', y-0.0
+        if   Supports[i]=='fixed' : marker, ec, fc, y = 's', 'red' , 'red' , y-0.0
+        elif Supports[i]=='pinned': marker, ec, fc, y = '^', 'red' , 'red' , y-0.1
+        elif Supports[i]=='roller': marker, ec, fc, y = 'o', 'red' , 'red' , y-0.1
+        elif Supports[i]=='free'  : marker, ec, fc, y = 'x', 'gray', 'gray', y-0.0
+        elif Supports[i]=='mid'   : marker, ec, fc, y = '' , 'gray', 'gray', y-0.0
         ax.scatter( x, y, marker=marker, s=150, ec=ec, fc=fc, alpha=0.75 )
         if   Supports[i]=='fixed' :
             ax.scatter( x, y+0.1, marker=marker, s=150, ec=ec, fc=fc, alpha=0.75 )
@@ -1347,3 +1348,93 @@ def Find_Accuracy( wBay_Main, W_Beams, Supports, NF, R ):
     
     Accuracy = np.round( (REAC/LOAD)*100, 1 )
     return Accuracy
+
+
+
+# from L to R   >>>>>>
+# from 0 to 6
+def Moment_Redist_L2R( left_idx, right_idx, Beams, redist ):   # eg: 0, 6, Beams, 0.20
+    I0, I1 = left_idx, right_idx
+    M_init = Beams.loc[I0,'Moment_left']
+    DM     = M_init * redist
+    n      = abs(I1-I0)
+    step   = DM/n
+    ML, MR, Idx = [],[], []
+    for i in range(I0,I1,1):
+        Idx.append(i)
+        ml = Beams.loc[i,'Moment_left' ] - DM;   ML.append(round(ml))
+        DM = DM - step
+        mr = Beams.loc[i,'Moment_right'] - DM;   MR.append(round(mr))
+    df         = pd.DataFrame([ML,MR]).T
+    df.index   = Idx
+    df.columns = ['Moment_left','Moment_right']
+    #df         = df.sort_index(ascending=True)
+    return df
+
+
+
+# from R to L   <<<<<<
+# from 6 to 0
+def Moment_Redist_R2L( left_idx, right_idx, Beams, redist ):   # eg: 0, 6, Beams, 0.20
+    I0, I1 = right_idx, left_idx
+    M_init = Beams.loc[I0-1,'Moment_right']
+    DM     = M_init * redist
+    n      = abs(I0-I1)
+    step   = DM/n
+    ML, MR, Idx = [],[],[]
+    for i in range(I0,I1,-1):
+        Idx.append(i-1)
+        mr = Beams.loc[i-1,'Moment_right'] - DM;   MR.append(round(mr))
+        DM = DM - step
+        ml = Beams.loc[i-1,'Moment_left' ] - DM;   ML.append(round(ml))
+    df         = pd.DataFrame([ML,MR]).T
+    df.index   = Idx
+    df.columns = ['Moment_left','Moment_right']
+    df         = df.sort_index(ascending=True)
+    return df
+
+
+
+def Moment_Redistribute( Supports_Idx, Supports, Beams, redist ):
+    
+    I = [ Supports_Idx[0] ]                    # first support
+    for i in Supports_Idx[1:-1]: 
+        if Supports[i] != 'free': I.append(i)  # 'non-free' inner supports
+    I.append( Supports_Idx[-1] )               # last support
+
+    df_redist = Beams.copy().loc[ :, ['L','Moment_left','Moment_right'] ]
+
+    for i in range( len(I)-1 ):
+    
+        left_idx, right_idx = I[i], I[i+1]
+        L2R, R2L            = True, True
+    
+        if Supports[left_idx]=='free' or Supports[right_idx]=='free': 
+            L2R = False
+            R2L = False
+        
+        try:
+            left_neighbour_idx = I[i-1]
+            if Supports[left_neighbour_idx]=='free': L2R = False
+        except:
+            pass
+        
+        try:
+            right_neighbour_idx = I[i+2]
+            if Supports[right_neighbour_idx]=='free': R2L = False
+        except:
+            pass
+    
+        if L2R:
+            df = Moment_Redist_L2R( left_idx, right_idx, df_redist, redist )
+            for i in df.index:
+                df_redist.loc[i,'Moment_left' ] = df.loc[i,'Moment_left' ]
+                df_redist.loc[i,'Moment_right'] = df.loc[i,'Moment_right']
+
+        if R2L:
+            df = Moment_Redist_R2L( left_idx, right_idx, df_redist, redist )
+            for i in df.index:
+                df_redist.loc[i,'Moment_left' ] = df.loc[i,'Moment_left' ]
+                df_redist.loc[i,'Moment_right'] = df.loc[i,'Moment_right']
+                
+    return df_redist
