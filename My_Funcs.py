@@ -1355,7 +1355,7 @@ def Find_Accuracy( wBay_Main, W_Beams, Supports, NF, R ):
 # from 0 to 6
 def Moment_Redist_L2R( left_idx, right_idx, Beams, redist ):   # eg: 0, 6, Beams, 0.20
     I0, I1 = left_idx, right_idx
-    M_init = Beams.loc[I0,'Moment_left']
+    M_init = min( 0, Beams.loc[I0,'Moment_left'] )
     DM     = M_init * redist
     n      = abs(I1-I0)
     step   = DM/n
@@ -1377,7 +1377,7 @@ def Moment_Redist_L2R( left_idx, right_idx, Beams, redist ):   # eg: 0, 6, Beams
 # from 6 to 0
 def Moment_Redist_R2L( left_idx, right_idx, Beams, redist ):   # eg: 0, 6, Beams, 0.20
     I0, I1 = right_idx, left_idx
-    M_init = Beams.loc[I0-1,'Moment_right']
+    M_init = min( 0, Beams.loc[I0-1,'Moment_right'] )
     DM     = M_init * redist
     n      = abs(I0-I1)
     step   = DM/n
