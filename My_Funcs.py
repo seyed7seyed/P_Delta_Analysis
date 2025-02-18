@@ -1438,3 +1438,112 @@ def Moment_Redistribute( Supports_Idx, Supports, Beams, redist ):
                 df_redist.loc[i,'Moment_right'] = df.loc[i,'Moment_right']
                 
     return df_redist
+
+
+def df_Main_with_Redist(df_Main, M_redist, Beams, Supports_Idx, NB):
+    
+    df_Main['Shear_left' ] = Beams.loc[    np.array(Supports_Idx[  :-1]), 'Shear_left'  ].tolist()
+    df_Main['Shear_right'] = Beams.loc[ -1+np.array(Supports_Idx[+1:  ]), 'Shear_right' ].tolist()
+
+    M = Beams.loc[    Supports_Idx[:-1], 'Moment_left' ].tolist() + Beams.loc[    [NB-1], 'Moment_right' ].tolist()
+    df_Main['Moment_left' ] = M[:-1]
+    df_Main['Moment_right'] = M[+1:]
+
+    M = M_redist.loc[ Supports_Idx[:-1], 'Moment_left' ].tolist() + M_redist.loc[ [NB-1], 'Moment_right' ].tolist()
+    df_Main['Moment_left redist' ] = M[:-1]
+    df_Main['Moment_right redist'] = M[+1:]
+
+    VL, VR = [], []
+    for i in df_Main.index:
+        dv = df_Main.loc[i,'Shear_right' ] - df_Main.loc[i,'Shear_left' ]
+        dm = df_Main.loc[i,'Moment_right redist'] - df_Main.loc[i,'Moment_left redist']
+        L  = df_Main.loc[i,'wBay']
+        vl = dm/L - dv/2;   vl = int(np.round(vl,0));   VL.append(vl)
+        vr = dm/L + dv/2;   vr = int(np.round(vr,0));   VR.append(vr)
+    df_Main['Shear_left redist' ] = VL
+    df_Main['Shear_right redist'] = VR
+        
+    return df_Main
+
+
+
+def Plot_Shear_Redist( df_Main, redist, Points, Supports ):
+    
+    VL_MAX = abs(df_Main['Shear_left redist' ]).max()
+    VR_MAX = abs(df_Main['Shear_right redist']).max()
+    V_MAX  = max(VL_MAX,VR_MAX)
+
+    fig, ax = plt.subplots( figsize=(12,3) )
+    ax.plot( [0,df_Main['wBay'].sum()], [0,0], 'dodgerblue' )
+    for i in df_Main.index:
+        xl, xr = df_Main.loc[i,['Start','Stop']].tolist()
+        vl, vr = df_Main.loc[i,['Shear_left redist','Shear_right redist']].tolist()
+        X = [ xl, xr ]
+        V = [ .7*vl/V_MAX, .7*vr/V_MAX ]
+        ax.plot(X,V,'dodgerblue')
+        ax.fill_between( X, [0,0], V, color='cyan', alpha=0.75 )
+        if   V[0]>=0:  plt.text( X[0], V[0]+.10, str(vl), ha='center', font='MV BOLI', fontsize=14 )
+        if   V[0]<=0:  plt.text( X[0], V[0]-.27, str(vl), ha='center', font='MV BOLI', fontsize=14 )
+        if   V[1]>=0:  plt.text( X[1], V[1]+.10, str(vr), ha='center', font='MV BOLI', fontsize=14 )
+        if   V[1]<=0:  plt.text( X[1], V[1]-.27, str(vr), ha='center', font='MV BOLI', fontsize=14 )
+        
+    # Supports
+    for i in Points.index:
+        x = Points.loc[i,'x']
+        y = Points.loc[i,'y']
+        if   Supports[i]=='fixed' : marker, ec, fc, y = 's', 'lightgray', 'lightgray', y-0.0
+        elif Supports[i]=='pinned': marker, ec, fc, y = '^', 'lightgray', 'lightgray', y-0.1
+        elif Supports[i]=='roller': marker, ec, fc, y = 'o', 'lightgray', 'lightgray', y-0.1
+        elif Supports[i]=='free'  : marker, ec, fc, y = 'x',      'gray',      'gray', y-0.0
+        elif Supports[i]=='mid'   : marker, ec, fc, y = '' ,      'gray',      'gray', y-0.0
+        ax.scatter( x, y, marker=marker, s=150, ec=ec, fc=fc, alpha=0.75 )
+        if   Supports[i]=='fixed' :
+            ax.scatter( x, y+0.1, marker=marker, s=150, ec=ec, fc=fc, alpha=0.75 )
+            ax.scatter( x, y-0.1, marker=marker, s=150, ec=ec, fc=fc, alpha=0.75 )
+    
+    # title
+    plt.title( 'Shear (KN)  ---  redist = '+str(redist), font='MV BOLI', fontsize=16 )
+    
+    # x of where V=0
+    X0 = []  
+    for i in df_Main.index:
+        vl = df_Main.loc[ i, 'Shear_left redist' ]
+        vr = df_Main.loc[ i, 'Shear_right redist']
+        if vl*vr<0:
+            xl = df_Main.loc[ i, 'Start' ]
+            xr = df_Main.loc[ i, 'Stop'  ]
+            L  = xr-xl
+            dx = L * abs(vl) /( abs(vl)+abs(vr) )
+            x0 = xl + dx
+            x0 = int(np.round(x0,0))
+            X0.append(x0)
+            plt.text( x0, 0+.10, str(0), ha='center', font='MV BOLI', fontsize=14 )
+    
+    # xticks
+    Xwalk = [0]
+    for i in df_Main['wBay']:
+        w = Xwalk[-1] + i 
+        Xwalk.append(w)
+    Xwalk = list( set( Xwalk + X0 ))
+    xtks = np.array(Xwalk,dtype='f8') 
+    ax.set_xticks( xtks )
+    plt.xticks(font='MV BOLI',rotation=45,fontsize=14)
+    
+    # yticks
+    Ywalk = [0]
+    ytks = np.array(Ywalk,dtype='f8')
+    ax.set_yticks( ytks )
+    plt.yticks(font='MV BOLI',rotation=0,fontsize=14)
+    
+    # ylim
+    plt.ylim([-1,+1])
+    
+    # grid
+    plt.grid('on',alpha=.1)
+    
+    # save image
+    plt.savefig('Shear_with_redist.png', dpi=120) 
+    plt.show()
+    
+    return None
+
